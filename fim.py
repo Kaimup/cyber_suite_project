@@ -1,4 +1,4 @@
-# fim/fim.py
+# fim/fim_fixed.py
 import os
 import hashlib
 import json
@@ -6,8 +6,8 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 
-WATCHED_DIR = "./test_folder"  # Directory to monitor
-LOG_FILE = "file_log.json"
+WATCHED_DIR = "./test_folder"          # Directory to monitor
+LOG_FILE = "./fim/file_log.json"       # Ensure this is NOT inside WATCHED_DIR
 
 # Ensure log file exists
 if not os.path.exists(LOG_FILE):
@@ -29,11 +29,19 @@ class MonitorHandler(FileSystemEventHandler):
             "event": event_type,
             "file": file_path
         }
-        with open(LOG_FILE, "r+") as f:
-            data = json.load(f)
-            data.append(log_entry)
-            f.seek(0)
+        # Read existing logs
+        try:
+            with open(LOG_FILE, "r") as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            data = []
+
+        data.append(log_entry)
+
+        # Write back to single log file
+        with open(LOG_FILE, "w") as f:
             json.dump(data, f, indent=2)
+
         print(log_entry)
 
     def on_created(self, event):
