@@ -1,4 +1,4 @@
-# fim/fim_hash_monitor.py
+# fim/fim_monitor.py
 import os
 import hashlib
 import json
@@ -7,15 +7,22 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 
-WATCHED_DIR = "./test_folder"        # Directory to monitor
-LOG_FILE = "./fim/file_log.json"     # Keep log file outside WATCHED_DIR
-HASH_FILE = "./fim/file_hashes.json" # Stores last known hashes
+#  CHANGE THIS ONLY
+WATCHED_DIR = "./test_folder"
 
-# Ensure log and hash files exist
-for file in [LOG_FILE, HASH_FILE]:
-    if not os.path.exists(file):
-        with open(file, "w") as f:
-            json.dump({}, f if file == HASH_FILE else [], f, indent=2)
+# Auto-generate log + hash files in same dir as script
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE = os.path.join(BASE_DIR, "file_log.json")
+HASH_FILE = os.path.join(BASE_DIR, "file_hashes.json")
+
+def ensure_files():
+    """Make sure log and hash files exist."""
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "w") as f:
+            json.dump([], f, indent=2)
+    if not os.path.exists(HASH_FILE):
+        with open(HASH_FILE, "w") as f:
+            json.dump({}, f, indent=2)
 
 def hash_file(file_path):
     """Return SHA256 hash of a file."""
@@ -26,12 +33,11 @@ def hash_file(file_path):
                 sha256.update(chunk)
         return sha256.hexdigest()
     except FileNotFoundError:
-        return None  # File deleted before hashing
+        return None
 
 class MonitorHandler(FileSystemEventHandler):
     def __init__(self):
         super().__init__()
-        # Load existing hashes
         with open(HASH_FILE, "r") as f:
             try:
                 self.hashes = json.load(f)
@@ -51,7 +57,6 @@ class MonitorHandler(FileSystemEventHandler):
         if file_hash:
             log_entry["hash"] = file_hash
 
-        # Append to log file
         with open(LOG_FILE, "r+") as f:
             try:
                 data = json.load(f)
@@ -72,7 +77,6 @@ class MonitorHandler(FileSystemEventHandler):
 
     def on_deleted(self, event):
         if not event.is_directory:
-            # Remove hash
             if event.src_path in self.hashes:
                 del self.hashes[event.src_path]
                 self.save_hashes()
@@ -89,6 +93,8 @@ class MonitorHandler(FileSystemEventHandler):
 
 if __name__ == "__main__":
     os.makedirs(WATCHED_DIR, exist_ok=True)
+    ensure_files()
+
     event_handler = MonitorHandler()
     observer = Observer()
     observer.schedule(event_handler, WATCHED_DIR, recursive=True)
@@ -99,6 +105,5 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Stopping monitor...")
         observer.stop()
     observer.join()
