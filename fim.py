@@ -1,4 +1,4 @@
-# fim/fim_monitor.py
+# fim.py
 import os
 import hashlib
 import json
@@ -7,13 +7,16 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 
-#  CHANGE THIS ONLY
-WATCHED_DIR = "./test_folder"
+# CHANGE ONLY THIS
+WATCHED_DIR = "/YOUR_DIRECTORY"
 
-# Auto-generate log + hash files in same dir as script
+# Log + hash files (kept in same dir as script, outside WATCHED_DIR ideally)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "file_log.json")
 HASH_FILE = os.path.join(BASE_DIR, "file_hashes.json")
+
+# Ignore these files so we don’t get infinite loops
+IGNORE_FILES = {LOG_FILE, HASH_FILE}
 
 def ensure_files():
     """Make sure log and hash files exist."""
@@ -68,22 +71,25 @@ class MonitorHandler(FileSystemEventHandler):
 
         print(log_entry)
 
+    def should_ignore(self, path):
+        return path in IGNORE_FILES
+
     def on_created(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self.should_ignore(event.src_path):
             file_hash = hash_file(event.src_path)
             self.hashes[event.src_path] = file_hash
             self.log_event("CREATED", event.src_path, file_hash)
             self.save_hashes()
 
     def on_deleted(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self.should_ignore(event.src_path):
             if event.src_path in self.hashes:
                 del self.hashes[event.src_path]
                 self.save_hashes()
             self.log_event("DELETED", event.src_path)
 
     def on_modified(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self.should_ignore(event.src_path):
             new_hash = hash_file(event.src_path)
             old_hash = self.hashes.get(event.src_path)
             if new_hash and new_hash != old_hash:
